@@ -2,7 +2,7 @@
 
 use revm::{
     db::{CacheDB, EmptyDB},
-    primitives::Bytecode,
+    primitives::{hex, Bytecode},
     InMemoryDB, EVM,
 };
 
@@ -24,4 +24,14 @@ pub fn initialise_evm() -> EVM<InMemoryDB> {
     evm.database(db);
 
     evm
+}
+
+/// Return a [u8;32] containing `num` leading zeros
+pub fn num_0s(num: usize) -> [u8; 32] {
+    let mut output: [u8; 32] = [0; 32];
+    let zeros = "0".repeat(num);
+    let fs = "f".repeat(64 - num);
+
+    hex::decode_to_slice(zeros + &fs, &mut output).unwrap();
+    output
 }
