@@ -10,7 +10,7 @@ use revm::{
 };
 use ruint::aliases::U256;
 
-use crate::{utils, Pow};
+use crate::{utils, Pow::mineCall};
 
 pub struct Miner {
     evm: EVM<InMemoryDB>,
@@ -51,14 +51,16 @@ impl Miner {
         let take_first = (leading_zeros + (leading_zeros & 1)) / 2;
         let range = utils::UintRange::new(U256::ZERO, U256::MAX);
 
+        // First 36 bytes are fixed, prefetch it
+        let mut calldata: [u8; 68] = [0; 68];
+        calldata[..4].copy_from_slice(&mineCall::SELECTOR);
+        calldata[4..36].copy_from_slice(&first_nonce.to_be_bytes::<32>());
+
         let now = std::time::Instant::now();
         // Start finding in parallel
         let result = range.par_bridge().find_map_any(|second_nonce| {
-            let calldata = Pow::mineCall {
-                nonce1: first_nonce,
-                nonce2: second_nonce,
-            }
-            .abi_encode();
+            let mut calldata = calldata.clone();
+            calldata[36..68].copy_from_slice(&second_nonce.to_be_bytes::<32>());
 
             // Try to avoid cloning the evm
             let mut evm = self.evm.clone();
