@@ -1,9 +1,11 @@
 //! Miner module
 
-use alloy_sol_types::{private::FixedBytes, SolCall};
+use alloy_sol_types::SolCall;
 use rayon::prelude::{ParallelBridge, ParallelIterator};
 use revm::{
-    primitives::{address, keccak256, AccountInfo, Address, ExecutionResult, Output, TransactTo},
+    primitives::{
+        address, keccak256, AccountInfo, Address, ExecutionResult, FixedBytes, Output, TransactTo,
+    },
     InMemoryDB, EVM,
 };
 use ruint::aliases::U256;
@@ -45,7 +47,8 @@ impl Miner {
         leading_zeros: usize,
         first_nonce: U256,
     ) -> Option<(U256, FixedBytes<32>)> {
-        let max_hash = FixedBytes::<32>::from_slice(&utils::num_0s(leading_zeros));
+        let max_hash = utils::num_0s(leading_zeros);
+        let take_first = (leading_zeros + (leading_zeros & 1)) / 2;
         let range = utils::UintRange::new(U256::ZERO, U256::MAX);
 
         let now = std::time::Instant::now();
@@ -70,14 +73,16 @@ impl Miner {
                 _ => panic!("Transaction execution failed"),
             };
 
-            let output = Pow::mineCall::abi_decode_returns(&result, true)
-                .unwrap()
-                .hashed;
+            // We know the Pow returns bytes32 so we can hardcode the slice
+            let output: &[u8; 32] = (&result as &[u8]).try_into().unwrap();
 
-            if output > max_hash {
-                None
+            if std::iter::zip(max_hash, output)
+                .take(take_first)
+                .all(|(f, s)| s <= &f)
+            {
+                Some((second_nonce, FixedBytes::<32>::from(output)))
             } else {
-                Some((second_nonce, output))
+                None
             }
         });
         let elapsed = now.elapsed();
