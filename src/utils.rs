@@ -5,6 +5,7 @@ use revm::{
     primitives::{hex, Bytecode},
     InMemoryDB, EVM,
 };
+use ruint::{aliases::U256, uint};
 
 /// Load from file `Pow` bytecode
 pub fn read_contract() -> Bytecode {
@@ -34,4 +35,29 @@ pub fn num_0s(num: usize) -> [u8; 32] {
 
     hex::decode_to_slice(zeros + &fs, &mut output).unwrap();
     output
+}
+
+pub struct UintRange {
+    start: U256,
+    end: U256,
+}
+
+impl UintRange {
+    pub fn new(start: U256, end: U256) -> Self {
+        UintRange { start, end }
+    }
+}
+
+impl Iterator for UintRange {
+    type Item = U256;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.start == self.end {
+            None
+        } else {
+            let result = Some(self.start);
+            self.start += uint!(1_U256);
+            result
+        }
+    }
 }
