@@ -67,7 +67,7 @@ impl Miner {
             evm.env.tx.data = calldata.into();
 
             // Call Pow contract to calculate hash
-            let result = match evm.transact_ref().unwrap().result {
+            let result = match evm.transact_preverified().unwrap().result {
                 ExecutionResult::Success { output, .. } => match output {
                     Output::Call(out) => out,
                     _ => panic!("EVM Call failed"),
