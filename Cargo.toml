@@ -11,6 +11,7 @@ codegen-units = 1
 alloy-sol-types = "0.5.2"
 dotenv = "0.15.0"
 rand = "0.8.5"
+rayon = "1.8.0"
 revm = "3.5.0"
 ruint = { version = "1.11.1", features = ["rand"] }
 tracing = "0.1.40"
