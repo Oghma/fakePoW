@@ -1,11 +1,12 @@
 //! Miner module
 
 use alloy_sol_types::{private::FixedBytes, SolCall};
+use rayon::prelude::{ParallelBridge, ParallelIterator};
 use revm::{
     primitives::{address, keccak256, AccountInfo, Address, ExecutionResult, Output, TransactTo},
     InMemoryDB, EVM,
 };
-use ruint::{aliases::U256, uint};
+use ruint::aliases::U256;
 
 use crate::{utils, Pow};
 
@@ -39,48 +40,49 @@ impl Miner {
     }
 
     /// Search for a valid hash
-    pub fn mine(&mut self, leading_zeros: usize, first_nonce: U256) -> (U256, FixedBytes<32>) {
+    pub fn mine(
+        &mut self,
+        leading_zeros: usize,
+        first_nonce: U256,
+    ) -> Option<(U256, FixedBytes<32>)> {
         let max_hash = FixedBytes::<32>::from_slice(&utils::num_0s(leading_zeros));
-        let increment = uint!(1_U256);
-
-        let mut second_nonce = U256::ZERO;
-        let mut output: FixedBytes<32> = FixedBytes([0; 32]);
-        let mut founded = false;
+        let range = utils::UintRange::new(U256::ZERO, U256::MAX);
 
         let now = std::time::Instant::now();
-        // Start searching the second none
-        while !founded {
-            // Encode call
-            let call_fun = Pow::mineCall {
+        // Start finding in parallel
+        let result = range.par_bridge().find_map_any(|second_nonce| {
+            let calldata = Pow::mineCall {
                 nonce1: first_nonce,
                 nonce2: second_nonce,
-            };
-            let calldata = call_fun.abi_encode();
+            }
+            .abi_encode();
 
-            self.evm.env.tx.data = calldata.into();
+            // Try to avoid cloning the evm
+            let mut evm = self.evm.clone();
+            evm.env.tx.data = calldata.into();
 
             // Call Pow contract to calculate hash
-            let result = match self.evm.transact_ref().unwrap().result {
+            let result = match evm.transact_ref().unwrap().result {
                 ExecutionResult::Success { output, .. } => match output {
                     Output::Call(out) => out,
-                    _ => panic!("EVM call failed"),
+                    _ => panic!("EVM Call failed"),
                 },
-                _ => panic!("EVM call failed"),
+                _ => panic!("Transaction execution failed"),
             };
 
-            output = Pow::mineCall::abi_decode_returns(&result, true)
+            let output = Pow::mineCall::abi_decode_returns(&result, true)
                 .unwrap()
                 .hashed;
 
-            if output <= max_hash {
-                founded = true;
+            if output > max_hash {
+                None
             } else {
-                second_nonce += increment;
+                Some((second_nonce, output))
             }
-        }
+        });
         let elapsed = now.elapsed();
-        tracing::info!("Hash generated in {:?}", elapsed);
+        tracing::info!("Mined in {:?}", elapsed);
 
-        (second_nonce, output)
+        result
     }
 }

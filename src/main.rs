@@ -24,7 +24,9 @@ fn main() {
 
     tracing::info!("First nonce generated: {}", first_nonce);
 
-    let (second_nonce, hash) = miner.mine(leading_zeros, first_nonce);
+    let Some((second_nonce, hash)) = miner.mine(leading_zeros, first_nonce) else {
+        panic!("Failed to find an hash")
+    };
 
     tracing::info!("Second nonce founded: {}", second_nonce);
     tracing::info!("Hash generated: {:?}", hash);
