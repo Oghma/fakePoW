@@ -1,5 +1,9 @@
 //! Module containing utilities functions
 
+use rayon::{
+    iter::plumbing::{bridge_unindexed, UnindexedProducer},
+    prelude::ParallelIterator,
+};
 use revm::{
     db::{CacheDB, EmptyDB},
     primitives::{hex, Bytecode},
@@ -46,6 +50,10 @@ impl UintRange {
     pub fn new(start: U256, end: U256) -> Self {
         UintRange { start, end }
     }
+
+    pub fn len(&self) -> U256 {
+        self.end - self.start
+    }
 }
 
 impl Iterator for UintRange {
@@ -59,5 +67,56 @@ impl Iterator for UintRange {
             self.start += uint!(1_U256);
             result
         }
+    }
+}
+
+impl ParallelIterator for UintRange {
+    type Item = U256;
+
+    fn drive_unindexed<C>(self, consumer: C) -> C::Result
+    where
+        C: rayon::iter::plumbing::UnindexedConsumer<Self::Item>,
+    {
+        bridge_unindexed(UintProducer { range: self }, consumer)
+    }
+
+    fn opt_len(&self) -> Option<usize> {
+        usize::try_from(self.len()).ok()
+    }
+}
+
+struct UintProducer {
+    range: UintRange,
+}
+
+impl IntoIterator for UintProducer {
+    type Item = <UintRange as Iterator>::Item;
+    type IntoIter = UintRange;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.range
+    }
+}
+
+impl UnindexedProducer for UintProducer {
+    type Item = U256;
+
+    fn split(mut self) -> (Self, Option<Self>) {
+        let index = self.range.len().div_ceil(uint!(2_U256));
+        if index > U256::ZERO {
+            let mid = self.range.start + index;
+            let right = UintRange::new(mid, self.range.end);
+            self.range.end = mid;
+            (self, Some(UintProducer { range: right }))
+        } else {
+            (self, None)
+        }
+    }
+
+    fn fold_with<F>(self, folder: F) -> F
+    where
+        F: rayon::iter::plumbing::Folder<Self::Item>,
+    {
+        folder.consume_iter(self)
     }
 }

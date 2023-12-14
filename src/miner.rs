@@ -1,7 +1,7 @@
 //! Miner module
 
 use alloy_sol_types::SolCall;
-use rayon::prelude::{ParallelBridge, ParallelIterator};
+use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use revm::{
     primitives::{
         address, keccak256, AccountInfo, Address, ExecutionResult, FixedBytes, Output, TransactTo,
@@ -58,7 +58,7 @@ impl Miner {
 
         let now = std::time::Instant::now();
         // Start finding in parallel
-        let result = range.par_bridge().find_map_any(|second_nonce| {
+        let result = range.into_par_iter().find_map_any(|second_nonce| {
             let mut calldata = calldata.clone();
             calldata[36..68].copy_from_slice(&second_nonce.to_be_bytes::<32>());
 
