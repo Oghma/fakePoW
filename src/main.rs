@@ -16,7 +16,7 @@ fn main() {
     let leading_zeros = std::env::var("NUM_0S").unwrap().parse().unwrap();
     tracing::info!("Find hash with {} leading zeros", leading_zeros);
 
-    let mut miner = miner::Miner::new();
+    let miner = miner::Miner::new();
 
     // Generate first nonce
     let mut rng = rand::thread_rng();
